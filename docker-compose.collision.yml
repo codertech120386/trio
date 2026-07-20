@@ -1,0 +1,28 @@
+# Variant: web and api BOTH on port 8080.
+#
+# Two services of one group sharing a port used to break cross-node east-west. Fleet's ingress
+# proxy bound the APP's own port on the host, so the second service to reconcile lost the race:
+#
+#     crossvm: ingress listen <group>-web:80: bind: address already in use
+#
+# and every cross-node call to that service failed, silently, with nothing in the app's own logs.
+# The app port is tenant-chosen while the host port space is shared by every app on the node, so at
+# any real density this is inevitable rather than unlucky — 80, 8080 and 3000 repeat constantly,
+# and two compose groups each with a `web` is the common case.
+#
+# Fleet now multiplexes east-west onto ONE port per node (7301) with the target app named in a
+# handshake, so the collision is structurally impossible. This file is the regression test for
+# that: deploy it, spill the group across nodes, and assert /call/api still returns 200.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.collision.yml up --build
+#
+# NOTE: only ONE service can publish 8080 to the host locally, so `ports` stays on web. Inside
+# Fleet each service has its own container IP and the host port is not used at all — which is why
+# this collides in Fleet's east-west path but not in local compose.
+
+services:
+  api:
+    environment:
+      SERVICE_NAME: api
+      PORT: "8080" # same as web — the whole point

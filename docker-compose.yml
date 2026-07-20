@@ -1,0 +1,65 @@
+# fleet-scenario-trio — a three-service compose group for exercising Fleet.
+#
+# web (public, :8080)  ──/call/api──▶  api (internal, :9090)
+# worker (PORTLESS)    background ticker
+#
+# Ports 8080 and 9090 are deliberately DIFFERENT here. docker-compose.collision.yml puts both on
+# 8080 to exercise the case where two services of one group share a port.
+#
+# deploy.resources.limits.memory is what Fleet maps to a TIER. Leaving it out means the default
+# (standard, 1 GB) per service, which on a small donor is the difference between the group placing
+# and sitting in "warming up" forever. Small tiers here also make the memory autoscale signal
+# reachable with a modest /mem call.
+
+services:
+  web:
+    build: ./web
+    ports:
+      # WEB_PORT only affects LOCAL runs (set it when 8080 is busy on your machine). Fleet ignores
+      # the host side entirely — containers there have their own IPs and publish nothing.
+      - "${WEB_PORT:-8080}:8080" # published => Fleet treats this as the group's public entrypoint
+    environment:
+      SERVICE_NAME: web
+      PORT: "8080"
+      API_URL: "http://api:9090" # the compose service name; Fleet aliases it inside the group network
+    depends_on:
+      api:
+        condition: service_healthy # compose `service_healthy` -> Fleet's deps_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 2
+    deploy:
+      resources:
+        limits:
+          memory: 256M # -> micro tier
+
+  api:
+    build: ./api
+    environment:
+      SERVICE_NAME: api
+      PORT: "9090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 2
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # No ports, no healthcheck. Both omissions are deliberate: Fleet only probes over HTTP, so a
+  # portless service can never have one, and drift-home consequently treats it as ineligible for
+  # migration. A trio without a portless member is not a realistic compose group.
+  worker:
+    build: ./worker
+    environment:
+      SERVICE_NAME: worker
+      TICK_INTERVAL_S: "5"
+      WORKER_HOLD_MB: "0" # raise to pull the group's memory average up
+    deploy:
+      resources:
+        limits:
+          memory: 256M

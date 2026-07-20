@@ -1,0 +1,15 @@
+# Per-service Dockerfile on purpose: Fleet's compose path builds each service separately, so a
+# single shared image would not exercise it.
+FROM python:3.12-alpine
+
+WORKDIR /app
+COPY app.py .
+
+# Fleet discovers the app's address from the container's PORT env (containerAddr in cmd/fleetd).
+ENV PORT=9090 \
+    SERVICE_NAME=api \
+    PYTHONUNBUFFERED=1
+
+EXPOSE 9090
+
+CMD ["python", "app.py"]
