@@ -3,17 +3,31 @@
 # web (public, :8080)  ──/call/api──▶  api (internal, :9090)
 # worker (PORTLESS)    background ticker
 #
-# Ports 8080 and 9090 are deliberately DIFFERENT here. docker-compose.collision.yml puts both on
-# 8080 to exercise the case where two services of one group share a port.
+# BUILD LAYOUT — why context is "." and the Dockerfiles live at the repo root
 #
-# deploy.resources.limits.memory is what Fleet maps to a TIER. Leaving it out means the default
-# (standard, 1 GB) per service, which on a small donor is the difference between the group placing
-# and sitting in "warming up" forever. Small tiers here also make the memory autoscale signal
+# The tidy idiom `build: ./web` does NOT work on Fleet today. Compose resolves `dockerfile`
+# relative to the CONTEXT, so `build: ./web` means ./web/Dockerfile. Fleet resolves it relative to
+# the REPO ROOT instead (internal/builder: "path to the Dockerfile within the repo"), so it looks
+# for ./Dockerfile, doesn't find one, and the build dies with:
+#
+#     build(fargate): builder exited 1: Essential container in task exited
+#
+# — with no indication that a missing file was the cause. Using context "." plus a repo-root
+# `Dockerfile.<service>` resolves identically under BOTH semantics, so this file builds locally
+# with real compose and on Fleet unchanged.
+#
+# Ports 8080 and 9090 are deliberately DIFFERENT. docker-compose.collision.yml puts both on 8080.
+#
+# deploy.resources.limits.memory is what Fleet maps to a TIER. Omit it and every service defaults
+# to standard (1 GB), which on a small donor is the difference between the group placing and
+# sitting in "warming up" forever. Small tiers here also make the memory autoscale signal
 # reachable with a modest /mem call.
 
 services:
   web:
-    build: ./web
+    build:
+      context: .
+      dockerfile: Dockerfile.web
     ports:
       # WEB_PORT only affects LOCAL runs (set it when 8080 is busy on your machine). Fleet ignores
       # the host side entirely — containers there have their own IPs and publish nothing.
@@ -36,7 +50,9 @@ services:
           memory: 256M # -> micro tier
 
   api:
-    build: ./api
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     environment:
       SERVICE_NAME: api
       PORT: "9090"
@@ -54,7 +70,9 @@ services:
   # portless service can never have one, and drift-home consequently treats it as ineligible for
   # migration. A trio without a portless member is not a realistic compose group.
   worker:
-    build: ./worker
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     environment:
       SERVICE_NAME: worker
       TICK_INTERVAL_S: "5"

@@ -2,7 +2,7 @@
 FROM python:3.12-alpine
 
 WORKDIR /app
-COPY app.py .
+COPY worker/app.py .
 
 ENV SERVICE_NAME=worker \
     TICK_INTERVAL_S=5 \

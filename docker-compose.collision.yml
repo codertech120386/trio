@@ -23,6 +23,9 @@
 
 services:
   api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
     environment:
       SERVICE_NAME: api
       PORT: "8080" # same as web — the whole point

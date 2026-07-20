@@ -31,6 +31,13 @@ failure modes in Fleet, each of which was a real bug: readiness checks that repo
 for anything portless, an ingress proxy binding `:0`, and a healthy-but-unroutable state being read
 as a fault. A trio without a portless member is not a realistic compose group.
 
+**Dockerfiles live at the repo root as `Dockerfile.<service>`, with `context: .`.** The tidier
+`build: ./web` does **not** work on Fleet: compose resolves `dockerfile` relative to the *context*
+(so `./web/Dockerfile`), but Fleet resolves it relative to the *repo root*, finds no `./Dockerfile`,
+and the build fails with `builder exited 1: Essential container in task exited` — no mention of a
+missing file. Root Dockerfiles plus `context: .` resolve identically under both, so this repo builds
+locally with real compose *and* on Fleet unchanged.
+
 **`deploy.resources.limits.memory` is set on every service.** Fleet maps it to a tier. Omit it and
 you get the default (standard, 1 GB) per service — on a small donor that is the difference between
 the group placing and sitting in "warming up" indefinitely.

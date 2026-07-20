@@ -3,13 +3,13 @@
 FROM python:3.12-alpine
 
 WORKDIR /app
-COPY app.py .
+COPY web/app.py .
 
 # Fleet discovers the app's address from the container's PORT env (containerAddr in cmd/fleetd).
-ENV PORT=9090 \
-    SERVICE_NAME=api \
+ENV PORT=8080 \
+    SERVICE_NAME=web \
     PYTHONUNBUFFERED=1
 
-EXPOSE 9090
+EXPOSE 8080
 
 CMD ["python", "app.py"]
