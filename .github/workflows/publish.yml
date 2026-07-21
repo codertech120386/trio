@@ -1,0 +1,32 @@
+# Build all three trio services and publish each to ghcr on every push to the default branch.
+# ghcr + the built-in GITHUB_TOKEN needs no secrets. Make each package PUBLIC once (repo Packages
+# settings) so Fleet donors can pull them anonymously.
+name: publish
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [web, api, worker]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/fleet-scenario-trio-${{ matrix.service }}:latest
+            ghcr.io/${{ github.repository_owner }}/fleet-scenario-trio-${{ matrix.service }}:${{ github.sha }}
